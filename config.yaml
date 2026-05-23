@@ -1,0 +1,18 @@
+server:
+  port: 8080
+  mode: release
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  username: root
+  password: password
+  dbname: task_scheduler
+  charset: utf8mb4
+  max_open_conns: 100
+  max_idle_conns: 10
+
+auth:
+  token:
+    secret: "your-secret-key-change-in-production"
+    header: X-Token
