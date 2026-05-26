@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -12,6 +17,7 @@ import (
 	"task-scheduler/internal/handler"
 	"task-scheduler/internal/middleware"
 	"task-scheduler/internal/repository"
+	"task-scheduler/internal/scheduler"
 	"task-scheduler/internal/service"
 )
 
@@ -44,10 +50,16 @@ func main() {
 	execRepo := repository.NewExecutionRepository(database.DB)
 	nodeRepo := repository.NewNodeRepository(database.DB)
 
+	executor := scheduler.NewExecutor(execRepo, taskRepo)
+
 	authService := service.NewAuthService(userRepo, cfg.Auth.Token.Secret)
 	taskService := service.NewTaskService(taskRepo)
 	execService := service.NewExecutionService(execRepo, taskRepo)
 	nodeService := service.NewNodeService(nodeRepo)
+
+	taskScheduler := scheduler.NewScheduler(taskRepo, executor.Execute)
+
+	taskService.SetScheduler(taskScheduler)
 
 	authHandler := handler.NewAuthHandler(authService)
 	taskHandler := handler.NewTaskHandler(taskService)
@@ -94,8 +106,34 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	log.Printf("服务器启动成功，监听端口: %d", cfg.Server.Port)
-	if err := router.Run(addr); err != nil {
-		log.Fatalf("服务器启动失败: %v", err)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
 	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("服务器启动失败: %v", err)
+		}
+	}()
+
+	if err := taskScheduler.Start(); err != nil {
+		log.Printf("调度器启动警告: %v", err)
+	}
+	log.Printf("服务器启动成功，监听端口: %d", cfg.Server.Port)
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("正在关闭服务器...")
+
+	taskScheduler.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("服务器关闭失败: %v", err)
+	}
+
+	log.Println("服务器已关闭")
 }

@@ -8,12 +8,22 @@ import (
 	"task-scheduler/internal/repository"
 )
 
+type TaskScheduler interface {
+	ReloadTask(taskID int64) error
+	RemoveTask(taskID int64)
+}
+
 type TaskService struct {
-	taskRepo *repository.TaskRepository
+	taskRepo  *repository.TaskRepository
+	scheduler TaskScheduler
 }
 
 func NewTaskService(taskRepo *repository.TaskRepository) *TaskService {
 	return &TaskService{taskRepo: taskRepo}
+}
+
+func (s *TaskService) SetScheduler(scheduler TaskScheduler) {
+	s.scheduler = scheduler
 }
 
 func (s *TaskService) Create(ctx context.Context, req *model.TaskCreateRequest, userID int64) (*model.Task, error) {
@@ -45,6 +55,13 @@ func (s *TaskService) Create(ctx context.Context, req *model.TaskCreateRequest, 
 	}
 
 	task.ID = id
+
+	if s.scheduler != nil && task.Status == 1 {
+		if err := s.scheduler.ReloadTask(task.ID); err != nil {
+			return nil, err
+		}
+	}
+
 	return task, nil
 }
 
@@ -72,18 +89,28 @@ func (s *TaskService) Update(ctx context.Context, id int64, req *model.TaskUpdat
 	if req.Timeout > 0 {
 		task.Timeout = req.Timeout
 	}
-	if req.RetryCount >= 0 {
-		task.RetryCount = req.RetryCount
+	if req.RetryCount != nil {
+		task.RetryCount = *req.RetryCount
 	}
 	if req.RetryInterval > 0 {
 		task.RetryInterval = req.RetryInterval
 	}
-	if req.Status != 0 {
-		task.Status = req.Status
+	if req.Status != nil {
+		task.Status = *req.Status
 	}
 
 	if err := s.taskRepo.Update(ctx, task); err != nil {
 		return nil, err
+	}
+
+	if s.scheduler != nil {
+		if task.Status == 1 {
+			if err := s.scheduler.ReloadTask(task.ID); err != nil {
+				return nil, err
+			}
+		} else {
+			s.scheduler.RemoveTask(task.ID)
+		}
 	}
 
 	return task, nil
@@ -97,7 +124,16 @@ func (s *TaskService) Delete(ctx context.Context, id int64) error {
 	if task == nil {
 		return errors.New("任务不存在")
 	}
-	return s.taskRepo.Delete(ctx, id)
+
+	if err := s.taskRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	if s.scheduler != nil {
+		s.scheduler.RemoveTask(id)
+	}
+
+	return nil
 }
 
 func (s *TaskService) GetByID(ctx context.Context, id int64) (*model.Task, error) {

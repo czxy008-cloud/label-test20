@@ -14,6 +14,7 @@ type ExecutionLog struct {
 	RetryAttempts int        `json:"retry_attempts"`
 	Output        string     `json:"output"`
 	ErrorMessage  string     `json:"error_message"`
+	Params        string     `json:"params"`
 	NodeID        string     `json:"node_id"`
 	CreatedAt     time.Time  `json:"created_at"`
 }

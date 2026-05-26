@@ -34,9 +34,9 @@ type TaskUpdateRequest struct {
 	CronExpression string `json:"cron_expression"`
 	Command        string `json:"command"`
 	Timeout        int    `json:"timeout"`
-	RetryCount     int    `json:"retry_count"`
+	RetryCount     *int   `json:"retry_count"`
 	RetryInterval  int    `json:"retry_interval"`
-	Status         int    `json:"status"`
+	Status         *int   `json:"status"`
 }
 
 type TaskListRequest struct {

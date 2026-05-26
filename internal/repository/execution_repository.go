@@ -17,9 +17,9 @@ func NewExecutionRepository(db *sql.DB) *ExecutionRepository {
 }
 
 func (r *ExecutionRepository) Create(ctx context.Context, log *model.ExecutionLog) (int64, error) {
-	query := `INSERT INTO execution_logs (task_id, task_name, trigger_type, status, start_time, retry_attempts, node_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO execution_logs (task_id, task_name, trigger_type, status, start_time, retry_attempts, params, node_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	result, err := r.db.ExecContext(ctx, query,
-		log.TaskID, log.TaskName, log.TriggerType, log.Status, log.StartTime, log.RetryAttempts, log.NodeID,
+		log.TaskID, log.TaskName, log.TriggerType, log.Status, log.StartTime, log.RetryAttempts, log.Params, log.NodeID,
 	)
 	if err != nil {
 		return 0, err
@@ -28,19 +28,19 @@ func (r *ExecutionRepository) Create(ctx context.Context, log *model.ExecutionLo
 }
 
 func (r *ExecutionRepository) Update(ctx context.Context, log *model.ExecutionLog) error {
-	query := `UPDATE execution_logs SET status = ?, end_time = ?, duration = ?, output = ?, error_message = ? WHERE id = ?`
+	query := `UPDATE execution_logs SET status = ?, start_time = ?, end_time = ?, duration = ?, retry_attempts = ?, output = ?, error_message = ?, params = ? WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query,
-		log.Status, log.EndTime, log.Duration, log.Output, log.ErrorMessage, log.ID,
+		log.Status, log.StartTime, log.EndTime, log.Duration, log.RetryAttempts, log.Output, log.ErrorMessage, log.Params, log.ID,
 	)
 	return err
 }
 
 func (r *ExecutionRepository) GetByID(ctx context.Context, id int64) (*model.ExecutionLog, error) {
-	query := `SELECT id, task_id, task_name, trigger_type, status, start_time, end_time, duration, retry_attempts, output, error_message, node_id, created_at FROM execution_logs WHERE id = ?`
+	query := `SELECT id, task_id, task_name, trigger_type, status, start_time, end_time, duration, retry_attempts, output, error_message, params, node_id, created_at FROM execution_logs WHERE id = ?`
 	row := r.db.QueryRowContext(ctx, query, id)
 
 	log := &model.ExecutionLog{}
-	err := row.Scan(&log.ID, &log.TaskID, &log.TaskName, &log.TriggerType, &log.Status, &log.StartTime, &log.EndTime, &log.Duration, &log.RetryAttempts, &log.Output, &log.ErrorMessage, &log.NodeID, &log.CreatedAt)
+	err := row.Scan(&log.ID, &log.TaskID, &log.TaskName, &log.TriggerType, &log.Status, &log.StartTime, &log.EndTime, &log.Duration, &log.RetryAttempts, &log.Output, &log.ErrorMessage, &log.Params, &log.NodeID, &log.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -83,7 +83,7 @@ func (r *ExecutionRepository) List(ctx context.Context, req *model.ExecutionList
 		return nil, 0, err
 	}
 
-	query := `SELECT id, task_id, task_name, trigger_type, status, start_time, end_time, duration, retry_attempts, output, error_message, node_id, created_at FROM execution_logs ` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	query := `SELECT id, task_id, task_name, trigger_type, status, start_time, end_time, duration, retry_attempts, output, error_message, params, node_id, created_at FROM execution_logs ` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	args = append(args, req.PageSize, (req.Page-1)*req.PageSize)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -95,7 +95,7 @@ func (r *ExecutionRepository) List(ctx context.Context, req *model.ExecutionList
 	var logs []*model.ExecutionLog
 	for rows.Next() {
 		log := &model.ExecutionLog{}
-		err := rows.Scan(&log.ID, &log.TaskID, &log.TaskName, &log.TriggerType, &log.Status, &log.StartTime, &log.EndTime, &log.Duration, &log.RetryAttempts, &log.Output, &log.ErrorMessage, &log.NodeID, &log.CreatedAt)
+		err := rows.Scan(&log.ID, &log.TaskID, &log.TaskName, &log.TriggerType, &log.Status, &log.StartTime, &log.EndTime, &log.Duration, &log.RetryAttempts, &log.Output, &log.ErrorMessage, &log.Params, &log.NodeID, &log.CreatedAt)
 		if err != nil {
 			return nil, 0, err
 		}

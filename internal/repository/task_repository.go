@@ -106,3 +106,24 @@ func (r *TaskRepository) List(ctx context.Context, req *model.TaskListRequest) (
 
 	return tasks, total, nil
 }
+
+func (r *TaskRepository) ListAllEnabled(ctx context.Context) ([]*model.Task, error) {
+	query := `SELECT id, name, description, cron_expression, command, timeout, retry_count, retry_interval, status, created_by, created_at, updated_at FROM tasks WHERE status = 1`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		task := &model.Task{}
+		err := rows.Scan(&task.ID, &task.Name, &task.Description, &task.CronExpression, &task.Command,
+			&task.Timeout, &task.RetryCount, &task.RetryInterval, &task.Status, &task.CreatedBy, &task.CreatedAt, &task.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
+}
